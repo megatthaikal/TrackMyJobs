@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import Anthropic from "@anthropic-ai/sdk";
+import { GoogleGenAI, Type } from "@google/genai";
 
 export type ExtractedJob = {
   company?: string;
@@ -35,69 +35,58 @@ async function fetchJobPageText(url: string): Promise<string> {
   return text.slice(0, 15000);
 }
 
-const EXTRACT_TOOL: Anthropic.Tool = {
-  name: "extract_job",
-  description:
-    "Record structured job posting details extracted from a job listing page's text.",
-  input_schema: {
-    type: "object",
-    properties: {
-      company: { type: "string", description: "The hiring company's name." },
-      role: { type: "string", description: "The job title / role." },
-      location: {
-        type: "string",
-        description:
-          "The job location as stated, e.g. 'San Francisco, CA' or 'Remote'.",
-      },
-      workType: {
-        type: "string",
-        enum: ["REMOTE", "HYBRID", "ONSITE"],
-        description:
-          "The work arrangement, only if clearly stated or strongly implied.",
-      },
-      datePosted: {
-        type: "string",
-        description:
-          "The date the job was posted, formatted YYYY-MM-DD, only if stated.",
-      },
-      salary: {
-        type: "string",
-        description: "The salary or compensation range exactly as stated.",
-      },
+const EXTRACT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    company: { type: Type.STRING, description: "The hiring company's name." },
+    role: { type: Type.STRING, description: "The job title / role." },
+    location: {
+      type: Type.STRING,
+      description:
+        "The job location as stated, e.g. 'San Francisco, CA' or 'Remote'.",
     },
-    required: ["company", "role"],
+    workType: {
+      type: Type.STRING,
+      enum: ["REMOTE", "HYBRID", "ONSITE"],
+      description:
+        "The work arrangement, only if clearly stated or strongly implied.",
+    },
+    datePosted: {
+      type: Type.STRING,
+      description:
+        "The date the job was posted, formatted YYYY-MM-DD, only if stated.",
+    },
+    salary: {
+      type: Type.STRING,
+      description: "The salary or compensation range exactly as stated.",
+    },
   },
+  required: ["company", "role"],
 };
 
 export async function extractJobFromUrl(url: string): Promise<ExtractedJob> {
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     throw new Error(
-      "Auto-extract isn't set up yet — add ANTHROPIC_API_KEY to your .env file."
+      "Auto-extract isn't set up yet — add GEMINI_API_KEY to your .env file."
     );
   }
 
   const pageText = await fetchJobPageText(url);
 
-  const client = new Anthropic();
-  const response = await client.messages.create({
-    model: "claude-opus-4-8",
-    max_tokens: 1024,
-    tools: [EXTRACT_TOOL],
-    tool_choice: { type: "tool", name: "extract_job" },
-    messages: [
-      {
-        role: "user",
-        content: `Extract the job posting details from the following page text. Only include fields you can confidently determine from the text; omit anything unclear rather than guessing.\n\n${pageText}`,
-      },
-    ],
+  const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+  const response = await client.models.generateContent({
+    model: "gemini-2.5-flash",
+    contents: `Extract the job posting details from the following page text. Only include fields you can confidently determine from the text; omit anything unclear rather than guessing.\n\n${pageText}`,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: EXTRACT_SCHEMA,
+    },
   });
 
-  const toolUse = response.content.find(
-    (block): block is Anthropic.ToolUseBlock => block.type === "tool_use"
-  );
-  if (!toolUse) {
+  const text = response.text;
+  if (!text) {
     throw new Error("Extraction didn't return any structured data.");
   }
 
-  return toolUse.input as ExtractedJob;
+  return JSON.parse(text) as ExtractedJob;
 }

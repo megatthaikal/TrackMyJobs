@@ -6,7 +6,7 @@ dashboard with pipeline stats, and AI auto-extraction from a pasted job link.
 ## Stack
 
 Next.js (App Router) + TypeScript, Prisma + PostgreSQL, Auth.js (Credentials),
-TanStack Table, Recharts, and the Claude API for auto-extraction.
+TanStack Table, Recharts, and the Gemini API for auto-extraction.
 
 ## Setup
 
@@ -26,9 +26,9 @@ TanStack Table, Recharts, and the Claude API for auto-extraction.
    node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
    ```
 
-4. **Anthropic API key** (optional, for auto-extract) — get one at
-   [console.anthropic.com](https://console.anthropic.com) and add it to `.env`
-   as `ANTHROPIC_API_KEY`. Without it, everything works except pasting a job
+4. **Gemini API key** (optional, for auto-extract, free tier) — get one at
+   [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and add it to
+   `.env` as `GEMINI_API_KEY`. Without it, everything works except pasting a job
    link to auto-fill — you'll see a clear error and can still add jobs manually.
 
 5. **Run the first migration** against your database:
@@ -52,7 +52,7 @@ TanStack Table, Recharts, and the Claude API for auto-extraction.
 - `src/app/(auth)` — login/signup pages
 - `src/app/(app)` — the authenticated app shell, `/applications` grid and `/dashboard`
 - `src/actions/` — server actions (CRUD, auth, extraction)
-- `src/lib/extract-job.ts` — fetches a job posting URL and asks Claude to extract structured fields
+- `src/lib/extract-job.ts` — fetches a job posting URL and asks Gemini to extract structured fields
 - `src/components/` — UI, including `applications-table.tsx` (the spreadsheet grid) and `dashboard/` (charts)
 
 ## Useful commands
