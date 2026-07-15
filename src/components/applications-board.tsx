@@ -13,6 +13,14 @@ import { ApplicationsSummary } from "@/components/applications-summary";
 import { Input } from "@/components/ui/input";
 import { celebrateApplied } from "@/lib/celebrate";
 
+function todayDateInputValue() {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
 export function ApplicationsBoard({
   initialApplications,
 }: {
@@ -22,9 +30,16 @@ export function ApplicationsBoard({
   const [globalFilter, setGlobalFilter] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
 
-  async function handlePatch(id: string, patch: Record<string, unknown>) {
+  async function handlePatch(id: string, rawPatch: Record<string, unknown>) {
     const previous = rows;
     const previousRow = previous.find((r) => r.id === id);
+
+    // Moving a job to "Applied" without an applied date yet — fill in today.
+    const patch =
+      rawPatch.status === "APPLIED" && !previousRow?.dateApplied
+        ? { ...rawPatch, dateApplied: todayDateInputValue() }
+        : rawPatch;
+
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } as ApplicationModel : r)));
 
     if (patch.status === "APPLIED" && previousRow?.status === "SAVED") {
