@@ -238,6 +238,7 @@ export function AddJobDialog({
                   placeholder="Copy the job posting text and paste it here..."
                   rows={6}
                   autoFocus
+                  className="max-h-48 overflow-y-auto"
                 />
                 <p className="text-sm text-muted-foreground">
                   For sites that block auto-fetching (LinkedIn and some

@@ -53,7 +53,13 @@ async function renderWithHeadlessBrowser(url: string): Promise<string> {
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
     );
-    await page.goto(url, { waitUntil: "networkidle2", timeout: 15000 });
+    // "networkidle2" waits for network activity to settle, which many sites
+    // (analytics beacons, polling, websockets) never fully do — that made
+    // this reliably eat its whole timeout. "domcontentloaded" fires as soon
+    // as the initial script has run, then a short fixed wait lets client-side
+    // rendering (React/Vue) finish painting the actual content.
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 20000 });
+    await new Promise((resolve) => setTimeout(resolve, 2500));
     return await page.content();
   } finally {
     await browser.close();
