@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import type { ApplicationModel } from "@/generated/prisma/models";
 import { ApplicationStatus, WorkType } from "@/generated/prisma/enums";
 import { createApplication } from "@/actions/application-actions";
-import { extractJob } from "@/actions/extract-actions";
+import { extractJob, extractJobFromPastedText } from "@/actions/extract-actions";
+import type { ExtractedJob } from "@/lib/extract-job";
 import { STATUS_LABELS } from "@/components/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -59,6 +60,7 @@ export function AddJobDialog({
   const [form, setForm] = useState(emptyForm);
   const [tab, setTab] = useState("link");
   const [linkUrl, setLinkUrl] = useState("");
+  const [pastedText, setPastedText] = useState("");
   const [extracting, setExtracting] = useState(false);
 
   function update<K extends keyof typeof emptyForm>(
@@ -71,7 +73,23 @@ export function AddJobDialog({
   function reset() {
     setForm(emptyForm);
     setLinkUrl("");
+    setPastedText("");
     setTab("link");
+  }
+
+  function applyExtracted(data: ExtractedJob, jobUrl?: string) {
+    setForm((f) => ({
+      ...f,
+      company: data.company ?? f.company,
+      role: data.role ?? f.role,
+      location: data.location ?? f.location,
+      workType: data.workType ?? f.workType,
+      datePosted: data.datePosted ?? f.datePosted,
+      salary: data.salary ?? f.salary,
+      jobUrl: jobUrl ?? f.jobUrl,
+    }));
+    setTab("manual");
+    toast.success("Extracted — review the details before saving.");
   }
 
   async function handleExtract() {
@@ -86,19 +104,25 @@ export function AddJobDialog({
         toast.error(result.error);
         return;
       }
-      const { data } = result;
-      setForm((f) => ({
-        ...f,
-        company: data.company ?? f.company,
-        role: data.role ?? f.role,
-        location: data.location ?? f.location,
-        workType: data.workType ?? f.workType,
-        datePosted: data.datePosted ?? f.datePosted,
-        salary: data.salary ?? f.salary,
-        jobUrl: linkUrl.trim(),
-      }));
-      setTab("manual");
-      toast.success("Extracted — review the details before saving.");
+      applyExtracted(result.data, linkUrl.trim());
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  async function handleExtractFromText() {
+    if (!pastedText.trim()) {
+      toast.error("Paste the job description first.");
+      return;
+    }
+    setExtracting(true);
+    try {
+      const result = await extractJobFromPastedText(pastedText);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      applyExtracted(result.data);
     } finally {
       setExtracting(false);
     }
@@ -161,6 +185,9 @@ export function AddJobDialog({
               <TabsTrigger value="link" className="flex-1">
                 Paste a link
               </TabsTrigger>
+              <TabsTrigger value="text" className="flex-1">
+                Paste description
+              </TabsTrigger>
               <TabsTrigger value="manual" className="flex-1">
                 Manual
               </TabsTrigger>
@@ -198,6 +225,39 @@ export function AddJobDialog({
                   location, and more. You can review and edit everything
                   before saving.
                 </p>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="text" className="flex flex-col gap-3 pt-2">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="pastedText">Job description</Label>
+                <Textarea
+                  id="pastedText"
+                  value={pastedText}
+                  onChange={(e) => setPastedText(e.target.value)}
+                  placeholder="Copy the job posting text and paste it here..."
+                  rows={6}
+                  autoFocus
+                />
+                <p className="text-sm text-muted-foreground">
+                  For sites that block auto-fetching (LinkedIn and some
+                  others), copy the job description straight from the page
+                  and paste it here instead.
+                </p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  disabled={extracting}
+                  onClick={handleExtractFromText}
+                  className="gap-1.5"
+                >
+                  {extracting ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  {extracting ? "Extracting..." : "Extract from text"}
+                </Button>
               </div>
             </TabsContent>
 

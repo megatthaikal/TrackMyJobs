@@ -10,7 +10,17 @@ export type ExtractedJob = {
   salary?: string;
 };
 
-async function fetchJobPageText(url: string): Promise<string> {
+// Below this many characters, a page is almost certainly a client-rendered
+// SPA shell rather than real job content — worth trying headless rendering.
+const MIN_USABLE_TEXT_LENGTH = 200;
+
+function extractReadableText(html: string): string {
+  const $ = cheerio.load(html);
+  $("script, style, noscript, svg, nav, footer, header, iframe").remove();
+  return $("body").text().replace(/\s+/g, " ").trim();
+}
+
+async function fetchJobPageHtml(url: string): Promise<string> {
   const res = await fetch(url, {
     headers: {
       "User-Agent":
@@ -25,10 +35,52 @@ async function fetchJobPageText(url: string): Promise<string> {
   if (!contentType.includes("text/html")) {
     throw new Error("That URL didn't return a webpage.");
   }
-  const html = await res.text();
-  const $ = cheerio.load(html);
-  $("script, style, noscript, svg, nav, footer, header, iframe").remove();
-  const text = $("body").text().replace(/\s+/g, " ").trim();
+  return res.text();
+}
+
+async function renderWithHeadlessBrowser(url: string): Promise<string> {
+  const chromium = (await import("@sparticuz/chromium")).default;
+  const puppeteer = await import("puppeteer-core");
+
+  const browser = await puppeteer.launch({
+    args: chromium.args,
+    executablePath: await chromium.executablePath(),
+    headless: true,
+  });
+
+  try {
+    const page = await browser.newPage();
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+    );
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 15000 });
+    return await page.content();
+  } finally {
+    await browser.close();
+  }
+}
+
+async function fetchJobPageText(url: string): Promise<string> {
+  const html = await fetchJobPageHtml(url);
+  let text = extractReadableText(html);
+
+  if (text.length < MIN_USABLE_TEXT_LENGTH) {
+    // Likely a client-rendered page (React/Vue SPA) with no real content in
+    // the initial HTML. Try rendering it with a real browser instead. This
+    // only works in environments with a compatible headless Chromium
+    // (i.e. production on Vercel) — fails silently in local dev on
+    // Windows/macOS, where we just fall back to whatever little text we have.
+    try {
+      const renderedHtml = await renderWithHeadlessBrowser(url);
+      const renderedText = extractReadableText(renderedHtml);
+      if (renderedText.length > text.length) {
+        text = renderedText;
+      }
+    } catch (err) {
+      console.warn("Headless render fallback unavailable:", err);
+    }
+  }
+
   if (!text) {
     throw new Error("Couldn't find any readable content on that page.");
   }
@@ -64,19 +116,19 @@ const EXTRACT_SCHEMA = {
   required: ["company", "role"],
 };
 
-export async function extractJobFromUrl(url: string): Promise<ExtractedJob> {
+export async function extractJobFromText(
+  jobText: string
+): Promise<ExtractedJob> {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error(
       "Auto-extract isn't set up yet — add GEMINI_API_KEY to your .env file."
     );
   }
 
-  const pageText = await fetchJobPageText(url);
-
   const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
   const response = await client.models.generateContent({
-    model: "gemini-2.5-flash",
-    contents: `Extract the job posting details from the following page text. Only include fields you can confidently determine from the text; omit anything unclear rather than guessing.\n\n${pageText}`,
+    model: "gemini-flash-latest",
+    contents: `Extract the job posting details from the following text. Only include fields you can confidently determine from the text; omit anything unclear rather than guessing.\n\n${jobText.slice(0, 15000)}`,
     config: {
       responseMimeType: "application/json",
       responseSchema: EXTRACT_SCHEMA,
@@ -89,4 +141,9 @@ export async function extractJobFromUrl(url: string): Promise<ExtractedJob> {
   }
 
   return JSON.parse(text) as ExtractedJob;
+}
+
+export async function extractJobFromUrl(url: string): Promise<ExtractedJob> {
+  const pageText = await fetchJobPageText(url);
+  return extractJobFromText(pageText);
 }

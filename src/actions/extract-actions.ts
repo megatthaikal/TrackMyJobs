@@ -1,6 +1,10 @@
 "use server";
 
-import { extractJobFromUrl, type ExtractedJob } from "@/lib/extract-job";
+import {
+  extractJobFromUrl,
+  extractJobFromText,
+  type ExtractedJob,
+} from "@/lib/extract-job";
 
 export type ExtractResult =
   | { ok: true; data: ExtractedJob }
@@ -15,6 +19,22 @@ export async function extractJob(url: string): Promise<ExtractResult> {
 
   try {
     const data = await extractJobFromUrl(url);
+    return { ok: true, data };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Extraction failed.";
+    return { ok: false, error: message };
+  }
+}
+
+export async function extractJobFromPastedText(
+  text: string
+): Promise<ExtractResult> {
+  if (!text.trim()) {
+    return { ok: false, error: "Paste the job description first." };
+  }
+
+  try {
+    const data = await extractJobFromText(text);
     return { ok: true, data };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Extraction failed.";
