@@ -13,7 +13,7 @@ import {
 import { ExternalLink, Trash2, ArrowUpDown, Inbox } from "lucide-react";
 import type { ApplicationModel } from "@/generated/prisma/models";
 import { ApplicationStatus, WorkType } from "@/generated/prisma/enums";
-import { STATUS_LABELS, StatusBadge } from "@/components/status-badge";
+import { STATUS_LABELS, STATUS_STYLES, STATUS_HEX } from "@/components/status-badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -109,15 +109,32 @@ export function ApplicationsTable({
             value={row.original.status}
             onValueChange={(v) => v && onPatch(row.original.id, { status: v })}
           >
-            <SelectTrigger className="h-8 w-[9.5rem] border-transparent bg-transparent px-1 hover:border-input [&_svg]:hidden">
+            <SelectTrigger
+              className={cn(
+                "h-8 w-[9.5rem] justify-start gap-1.5 border-transparent px-2.5 font-medium transition-colors hover:opacity-90 [&_svg]:hidden",
+                STATUS_STYLES[row.original.status]
+              )}
+            >
               <SelectValue>
-                <StatusBadge status={row.original.status} />
+                <span className="flex items-center gap-1.5">
+                  <span
+                    className="size-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: STATUS_HEX[row.original.status] }}
+                  />
+                  {STATUS_LABELS[row.original.status]}
+                </span>
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
               {Object.values(ApplicationStatus).map((s) => (
                 <SelectItem key={s} value={s}>
-                  {STATUS_LABELS[s]}
+                  <span className="flex items-center gap-1.5">
+                    <span
+                      className="size-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: STATUS_HEX[s] }}
+                    />
+                    {STATUS_LABELS[s]}
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

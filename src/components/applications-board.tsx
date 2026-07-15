@@ -9,7 +9,9 @@ import {
 } from "@/actions/application-actions";
 import { ApplicationsTable } from "@/components/applications-table";
 import { AddJobDialog } from "@/components/add-job-dialog";
+import { ApplicationsSummary } from "@/components/applications-summary";
 import { Input } from "@/components/ui/input";
+import { celebrateApplied } from "@/lib/celebrate";
 
 export function ApplicationsBoard({
   initialApplications,
@@ -22,7 +24,16 @@ export function ApplicationsBoard({
 
   async function handlePatch(id: string, patch: Record<string, unknown>) {
     const previous = rows;
+    const previousRow = previous.find((r) => r.id === id);
     setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } as ApplicationModel : r)));
+
+    if (patch.status === "APPLIED" && previousRow?.status === "SAVED") {
+      celebrateApplied();
+      toast.success(
+        `Nice! You applied to ${previousRow.role} at ${previousRow.company} 🎉`
+      );
+    }
+
     try {
       await updateApplication(id, patch);
     } catch {
@@ -51,6 +62,7 @@ export function ApplicationsBoard({
 
   return (
     <div className="flex flex-col gap-4">
+      <ApplicationsSummary rows={rows} />
       <div className="flex items-center justify-between gap-3">
         <Input
           placeholder="Search company, role, or location..."

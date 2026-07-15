@@ -10,7 +10,7 @@ export const STATUS_LABELS: Record<ApplicationStatus, string> = {
   WITHDRAWN: "Withdrawn",
 };
 
-const STATUS_STYLES: Record<ApplicationStatus, string> = {
+export const STATUS_STYLES: Record<ApplicationStatus, string> = {
   SAVED: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
   APPLIED: "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
   INTERVIEWING:
