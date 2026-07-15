@@ -106,6 +106,41 @@ async function fetchJobPageText(url: string): Promise<string> {
   return text.slice(0, 15000);
 }
 
+function geminiErrorStatus(err: unknown): number | undefined {
+  const status = (err as { status?: unknown })?.status;
+  return typeof status === "number" ? status : undefined;
+}
+
+function isOverloadedError(err: unknown): boolean {
+  const status = geminiErrorStatus(err);
+  if (status === 503 || status === 429) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /UNAVAILABLE|RESOURCE_EXHAUSTED|high demand/i.test(message);
+}
+
+async function generateContentWithRetry(
+  client: GoogleGenAI,
+  params: Parameters<GoogleGenAI["models"]["generateContent"]>[0]
+) {
+  const maxRetries = 2;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await client.models.generateContent(params);
+    } catch (err) {
+      if (!isOverloadedError(err) || attempt >= maxRetries) {
+        if (isOverloadedError(err)) {
+          throw new Error(
+            "Gemini is experiencing high demand right now. Please try again in a moment."
+          );
+        }
+        throw err;
+      }
+      const delayMs = 800 * 2 ** attempt;
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 const EXTRACT_SCHEMA = {
   type: Type.OBJECT,
   properties: {
@@ -145,7 +180,7 @@ export async function extractJobFromText(
   }
 
   const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const response = await client.models.generateContent({
+  const response = await generateContentWithRetry(client, {
     model: "gemini-flash-latest",
     contents: `Extract the job posting details from the following text. Only include fields you can confidently determine from the text; omit anything unclear rather than guessing.\n\n${jobText.slice(0, 15000)}`,
     config: {
