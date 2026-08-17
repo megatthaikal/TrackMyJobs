@@ -10,7 +10,7 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
-import { ExternalLink, Trash2, ArrowUpDown, Inbox } from "lucide-react";
+import { ExternalLink, MoreVertical, Pencil, Trash2, ArrowUpDown, Inbox } from "lucide-react";
 import type { ApplicationModel } from "@/generated/prisma/models";
 import { ApplicationStatus, WorkType } from "@/generated/prisma/enums";
 import { STATUS_LABELS, STATUS_STYLES, STATUS_HEX } from "@/components/status-badge";
@@ -24,6 +24,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Table,
   TableBody,
@@ -48,6 +54,7 @@ export function ApplicationsTable({
   rows,
   onPatch,
   onDelete,
+  onEdit,
   globalFilter,
   onGlobalFilterChange,
   highlightId,
@@ -55,6 +62,7 @@ export function ApplicationsTable({
   rows: ApplicationModel[];
   onPatch: (id: string, patch: Record<string, unknown>) => void;
   onDelete: (id: string) => void;
+  onEdit: (app: ApplicationModel) => void;
   globalFilter: string;
   onGlobalFilterChange: (value: string) => void;
   highlightId?: string | null;
@@ -139,23 +147,6 @@ export function ApplicationsTable({
               ))}
             </SelectContent>
           </Select>
-        ),
-      },
-      {
-        accessorKey: "datePosted",
-        header: ({ column }) => (
-          <SortableHeader label="Date Posted" column={column} />
-        ),
-        cell: ({ row }) => (
-          <Input
-            type="date"
-            defaultValue={toDateInputValue(row.original.datePosted)}
-            key={row.original.id + String(row.original.datePosted)}
-            className="h-8 w-[9.5rem] border-transparent bg-transparent hover:border-input focus-visible:border-input"
-            onChange={(e) =>
-              onPatch(row.original.id, { datePosted: e.target.value || null })
-            }
-          />
         ),
       },
       {
@@ -249,26 +240,44 @@ export function ApplicationsTable({
         header: "",
         enableSorting: false,
         cell: ({ row }) => (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-8 text-muted-foreground hover:text-destructive"
-            onClick={() => {
-              if (
-                confirm(
-                  `Delete ${row.original.company} — ${row.original.role}?`
-                )
-              ) {
-                onDelete(row.original.id);
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 text-muted-foreground"
+                />
               }
-            }}
-          >
-            <Trash2 className="size-4" />
-          </Button>
+            >
+              <MoreVertical className="size-4" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEdit(row.original)}>
+                <Pencil className="size-4" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => {
+                  if (
+                    confirm(
+                      `Delete ${row.original.company} — ${row.original.role}?`
+                    )
+                  ) {
+                    onDelete(row.original.id);
+                  }
+                }}
+              >
+                <Trash2 className="size-4" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ),
       },
     ],
-    [onPatch, onDelete]
+    [onPatch, onDelete, onEdit]
   );
 
   const table = useReactTable({

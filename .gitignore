@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# unrelated local files (not part of this project)
+/Codility Assessment.zip
+/Codility Assessment/

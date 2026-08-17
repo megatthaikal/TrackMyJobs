@@ -9,6 +9,7 @@ import {
 } from "@/actions/application-actions";
 import { ApplicationsTable } from "@/components/applications-table";
 import { AddJobDialog } from "@/components/add-job-dialog";
+import { EditJobDialog } from "@/components/edit-job-dialog";
 import { ApplicationsSummary } from "@/components/applications-summary";
 import { Input } from "@/components/ui/input";
 import { celebrateApplied } from "@/lib/celebrate";
@@ -29,6 +30,7 @@ export function ApplicationsBoard({
   const [rows, setRows] = useState(initialApplications);
   const [globalFilter, setGlobalFilter] = useState("");
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  const [editingApp, setEditingApp] = useState<ApplicationModel | null>(null);
 
   async function handlePatch(id: string, rawPatch: Record<string, unknown>) {
     const previous = rows;
@@ -91,9 +93,15 @@ export function ApplicationsBoard({
         rows={rows}
         onPatch={handlePatch}
         onDelete={handleDelete}
+        onEdit={setEditingApp}
         globalFilter={globalFilter}
         onGlobalFilterChange={setGlobalFilter}
         highlightId={highlightId}
+      />
+      <EditJobDialog
+        app={editingApp}
+        onOpenChange={(open) => !open && setEditingApp(null)}
+        onSave={handlePatch}
       />
     </div>
   );
