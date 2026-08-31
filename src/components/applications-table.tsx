@@ -97,6 +97,7 @@ export function ApplicationsTable({
         cell: ({ row }) => (
           <Input
             defaultValue={row.original.role}
+            title={row.original.role}
             key={row.original.id + row.original.role}
             className="h-8 min-w-[10rem] border-transparent bg-transparent hover:border-input focus-visible:border-input"
             onBlur={(e) => {
