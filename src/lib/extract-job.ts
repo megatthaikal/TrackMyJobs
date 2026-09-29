@@ -1,5 +1,6 @@
 import * as cheerio from "cheerio";
 import { GoogleGenAI, Type } from "@google/genai";
+import Groq from "groq-sdk";
 
 export type ExtractedJob = {
   company?: string;
@@ -118,6 +119,10 @@ function isOverloadedError(err: unknown): boolean {
   return /UNAVAILABLE|RESOURCE_EXHAUSTED|high demand/i.test(message);
 }
 
+// Thrown once Gemini has exhausted its retries due to overload, so the
+// caller can fall back to Groq instead of surfacing this to the user.
+class GeminiOverloadedError extends Error {}
+
 async function generateContentWithRetry(
   client: GoogleGenAI,
   params: Parameters<GoogleGenAI["models"]["generateContent"]>[0]
@@ -129,8 +134,8 @@ async function generateContentWithRetry(
     } catch (err) {
       if (!isOverloadedError(err) || attempt >= maxRetries) {
         if (isOverloadedError(err)) {
-          throw new Error(
-            "Gemini is experiencing high demand right now. Please try again in a moment."
+          throw new GeminiOverloadedError(
+            "Gemini is experiencing high demand right now."
           );
         }
         throw err;
@@ -170,9 +175,7 @@ const EXTRACT_SCHEMA = {
   required: ["company", "role"],
 };
 
-export async function extractJobFromText(
-  jobText: string
-): Promise<ExtractedJob> {
+async function extractWithGemini(jobText: string): Promise<ExtractedJob> {
   if (!process.env.GEMINI_API_KEY) {
     throw new Error(
       "Auto-extract isn't set up yet — add GEMINI_API_KEY to your .env file."
@@ -195,6 +198,63 @@ export async function extractJobFromText(
   }
 
   return JSON.parse(text) as ExtractedJob;
+}
+
+// Groq has no schema-enforced structured output like Gemini's responseSchema,
+// so the field spec is spelled out in the prompt and paired with JSON mode.
+const EXTRACT_FIELDS_PROMPT = `Extract the job posting details from the text below and respond with ONLY a JSON object with these fields. Omit any field you can't confidently determine from the text — do not guess.
+- company: the hiring company's name (string)
+- role: the job title / role (string)
+- location: the job location as stated, e.g. "San Francisco, CA" or "Remote" (string)
+- workType: one of "REMOTE", "HYBRID", "ONSITE" — only if clearly stated or strongly implied (string)
+- datePosted: the date the job was posted, formatted YYYY-MM-DD, only if stated (string)
+- salary: the salary or compensation range exactly as stated (string)`;
+
+async function extractWithGroq(jobText: string): Promise<ExtractedJob> {
+  if (!process.env.GROQ_API_KEY) {
+    throw new Error("Groq fallback isn't configured.");
+  }
+
+  const client = new Groq({ apiKey: process.env.GROQ_API_KEY });
+  const completion = await client.chat.completions.create({
+    model: "openai/gpt-oss-120b",
+    response_format: { type: "json_object" },
+    messages: [
+      {
+        role: "user",
+        content: `${EXTRACT_FIELDS_PROMPT}\n\nJob posting text:\n${jobText.slice(0, 15000)}`,
+      },
+    ],
+  });
+
+  const text = completion.choices[0]?.message?.content;
+  if (!text) {
+    throw new Error("Extraction didn't return any structured data.");
+  }
+
+  return JSON.parse(text) as ExtractedJob;
+}
+
+export async function extractJobFromText(
+  jobText: string
+): Promise<ExtractedJob> {
+  try {
+    return await extractWithGemini(jobText);
+  } catch (err) {
+    if (!(err instanceof GeminiOverloadedError)) throw err;
+
+    if (process.env.GROQ_API_KEY) {
+      try {
+        return await extractWithGroq(jobText);
+      } catch (groqErr) {
+        console.warn("Groq fallback also failed:", groqErr);
+      }
+    }
+
+    throw new Error(
+      "AI extraction is very busy right now. Please try again in a moment."
+    );
+  }
 }
 
 export async function extractJobFromUrl(url: string): Promise<ExtractedJob> {

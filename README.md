@@ -31,6 +31,11 @@ TanStack Table, Recharts, and the Gemini API for auto-extraction.
    `.env` as `GEMINI_API_KEY`. Without it, everything works except pasting a job
    link to auto-fill — you'll see a clear error and can still add jobs manually.
 
+4b. **Groq API key** (optional, fallback for auto-extract, free tier) — get one at
+   [console.groq.com/keys](https://console.groq.com/keys) and add it to `.env` as
+   `GROQ_API_KEY`. When Gemini is overloaded, extraction automatically retries on
+   Groq instead of failing.
+
 5. **Run the first migration** against your database:
 
    ```bash
@@ -52,7 +57,7 @@ TanStack Table, Recharts, and the Gemini API for auto-extraction.
 - `src/app/(auth)` — login/signup pages
 - `src/app/(app)` — the authenticated app shell, `/applications` grid and `/dashboard`
 - `src/actions/` — server actions (CRUD, auth, extraction)
-- `src/lib/extract-job.ts` — fetches a job posting URL and asks Gemini to extract structured fields
+- `src/lib/extract-job.ts` — fetches a job posting URL and asks Gemini (falling back to Groq if overloaded) to extract structured fields
 - `src/components/` — UI, including `applications-table.tsx` (the spreadsheet grid) and `dashboard/` (charts)
 
 ## Useful commands
